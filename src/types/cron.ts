@@ -12,6 +12,8 @@ export interface CronJobTarget {
   channelType: ChannelType;
   channelId: string;
   channelName: string;
+  accountId?: string;
+  recipientId?: string;
 }
 
 /**

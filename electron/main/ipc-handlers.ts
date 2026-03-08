@@ -688,7 +688,7 @@ interface GatewayCronJob {
   updatedAtMs: number;
   schedule: { kind: string; expr?: string; everyMs?: number; at?: string; tz?: string };
   payload: { kind: string; message?: string; text?: string };
-  delivery?: { mode: string; channel?: string; to?: string };
+  delivery?: { mode: string; channel?: string; to?: string; accountId?: string };
   state: {
     nextRunAtMs?: number;
     lastRunAtMs?: number;
@@ -707,10 +707,17 @@ function transformCronJob(job: GatewayCronJob) {
 
   // Build target from delivery info
   const channelType = job.delivery?.channel || 'unknown';
+  const accountId = job.delivery?.accountId || 'default';
+  const channelId = `${channelType}-${accountId}`;
+  const recipientId = typeof job.delivery?.to === 'string'
+    ? job.delivery.to.replace(/^channel:/, '').replace(/^user:/, '')
+    : undefined;
   const target = {
     channelType,
-    channelId: channelType,
-    channelName: channelType,
+    channelId,
+    channelName: accountId === 'default' ? channelType : `${channelType} (${accountId})`,
+    accountId,
+    recipientId,
   };
 
   // Build lastRun from state
@@ -769,13 +776,13 @@ function registerCronHandlers(gatewayManager: GatewayManager): void {
     name: string;
     message: string;
     schedule: string;
-    target: { channelType: string; channelId: string; channelName: string };
+    target: { channelType: string; channelId: string; channelName: string; accountId?: string; recipientId?: string };
     enabled?: boolean;
   }) => {
     try {
       // Transform frontend input to Gateway cron.add format
       // For Discord, the recipient must be prefixed with "channel:" or "user:"
-      const recipientId = input.target.channelId;
+      const recipientId = input.target.recipientId;
       const deliveryTo = input.target.channelType === 'discord' && recipientId
         ? `channel:${recipientId}`
         : recipientId;
@@ -790,7 +797,8 @@ function registerCronHandlers(gatewayManager: GatewayManager): void {
         delivery: {
           mode: 'announce',
           channel: input.target.channelType,
-          to: deliveryTo,
+          ...(input.target.accountId ? { accountId: input.target.accountId } : {}),
+          ...(deliveryTo ? { to: deliveryTo } : {}),
         },
       };
       const result = await gatewayManager.rpc('cron.add', gatewayInput);
@@ -818,7 +826,23 @@ function registerCronHandlers(gatewayManager: GatewayManager): void {
         patch.payload = { kind: 'agentTurn', message: patch.message };
         delete patch.message;
       }
-      const result = await gatewayManager.rpc('cron.update', { id, patch });
+      // Transform frontend target object to Gateway delivery format if present
+      if (patch.target && typeof patch.target === 'object') {
+        const target = patch.target as { channelType?: string; accountId?: string; recipientId?: string };
+        const recipientId = typeof target.recipientId === 'string' ? target.recipientId : '';
+        const deliveryTo = target.channelType === 'discord' && recipientId
+          ? `channel:${recipientId}`
+          : recipientId;
+
+        patch.delivery = {
+          mode: 'announce',
+          channel: target.channelType ?? 'unknown',
+          ...(target.accountId ? { accountId: target.accountId } : {}),
+          ...(deliveryTo ? { to: deliveryTo } : {}),
+        };
+        delete patch.target;
+      }
+      const result = await gatewayManager.rpc('cron.update', { jobId: id, patch });
       return result;
     } catch (error) {
       console.error('Failed to update cron job:', error);
@@ -829,7 +853,7 @@ function registerCronHandlers(gatewayManager: GatewayManager): void {
   // Delete a cron job
   ipcMain.handle('cron:delete', async (_, id: string) => {
     try {
-      const result = await gatewayManager.rpc('cron.remove', { id });
+      const result = await gatewayManager.rpc('cron.remove', { jobId: id });
       return result;
     } catch (error) {
       console.error('Failed to delete cron job:', error);
@@ -840,7 +864,7 @@ function registerCronHandlers(gatewayManager: GatewayManager): void {
   // Toggle a cron job enabled/disabled
   ipcMain.handle('cron:toggle', async (_, id: string, enabled: boolean) => {
     try {
-      const result = await gatewayManager.rpc('cron.update', { id, patch: { enabled } });
+      const result = await gatewayManager.rpc('cron.update', { jobId: id, patch: { enabled } });
       return result;
     } catch (error) {
       console.error('Failed to toggle cron job:', error);
@@ -851,8 +875,19 @@ function registerCronHandlers(gatewayManager: GatewayManager): void {
   // Trigger a cron job manually
   ipcMain.handle('cron:trigger', async (_, id: string) => {
     try {
-      const result = await gatewayManager.rpc('cron.run', { id, mode: 'force' });
-      return result;
+      void gatewayManager.rpc('cron.run', { jobId: id, mode: 'force' }, 180000)
+        .then((result) => {
+          logger.info(`Cron job triggered successfully (jobId=${id})`, result);
+        })
+        .catch((error) => {
+          console.error('Failed to trigger cron job in background:', error);
+        });
+
+      return {
+        sessionKey: `agent:main:cron:${id}`,
+        jobId: id,
+        started: true,
+      };
     } catch (error) {
       console.error('Failed to trigger cron job:', error);
       throw error;

@@ -16,7 +16,7 @@ interface CronState {
   updateJob: (id: string, input: CronJobUpdateInput) => Promise<void>;
   deleteJob: (id: string) => Promise<void>;
   toggleJob: (id: string, enabled: boolean) => Promise<void>;
-  triggerJob: (id: string) => Promise<void>;
+  triggerJob: (id: string) => Promise<{ sessionKey?: string } | void>;
   setJobs: (jobs: CronJob[]) => void;
 }
 
@@ -89,7 +89,7 @@ export const useCronStore = create<CronState>((set) => ({
   
   triggerJob: async (id) => {
     try {
-      const result = await window.electron.ipcRenderer.invoke('cron:trigger', id);
+      const result = await window.electron.ipcRenderer.invoke('cron:trigger', id) as { sessionKey?: string };
       console.log('Cron trigger result:', result);
       // Refresh jobs after trigger to update lastRun/nextRun state
       try {
@@ -98,6 +98,7 @@ export const useCronStore = create<CronState>((set) => ({
       } catch {
         // Ignore refresh error
       }
+      return result;
     } catch (error) {
       console.error('Failed to trigger cron job:', error);
       throw error;

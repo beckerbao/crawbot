@@ -3,6 +3,7 @@
  * Manage scheduled tasks
  */
 import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus,
   Clock,
@@ -31,6 +32,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useCronStore } from '@/stores/cron';
 import { useChannelsStore } from '@/stores/channels';
 import { useGatewayStore } from '@/stores/gateway';
+import { useChatStore } from '@/stores/chat';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { formatRelativeTime, cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -143,11 +145,13 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
   const [customSchedule, setCustomSchedule] = useState('');
   const [useCustom, setUseCustom] = useState(false);
   const [channelId, setChannelId] = useState(job?.target.channelId || '');
-  const [discordChannelId, setDiscordChannelId] = useState('');
+  const [discordChannelId, setDiscordChannelId] = useState(job?.target.recipientId || '');
   const [enabled, setEnabled] = useState(job?.enabled ?? true);
 
   const selectedChannel = channels.find((c) => c.id === channelId);
   const isDiscord = selectedChannel?.type === 'discord';
+  const isTelegram = selectedChannel?.type === 'telegram';
+  const requiresRecipientTarget = isDiscord || isTelegram;
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -163,8 +167,8 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
       return;
     }
     // Validate Discord channel ID when Discord is selected
-    if (selectedChannel?.type === 'discord' && !discordChannelId.trim()) {
-      toast.error(t('toast.discordIdRequired'));
+    if (requiresRecipientTarget && !discordChannelId.trim()) {
+      toast.error(isTelegram ? t('toast.telegramChatIdRequired') : t('toast.discordIdRequired'));
       return;
     }
 
@@ -177,7 +181,7 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
     setSaving(true);
     try {
       // For Discord, use the manually entered channel ID; for others, use empty
-      const actualChannelId = selectedChannel!.type === 'discord'
+      const actualChannelId = requiresRecipientTarget
         ? discordChannelId.trim()
         : '';
 
@@ -191,8 +195,10 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
           schedule: finalSchedule,
           target: {
             channelType: selectedChannel!.type,
-            channelId: actualChannelId,
+            channelId: selectedChannel!.id,
             channelName: selectedChannel!.name,
+            accountId: selectedChannel!.accountId,
+            recipientId: actualChannelId || undefined,
           },
           enabled,
         });
@@ -313,16 +319,16 @@ function TaskDialog({ job, onClose, onSave }: TaskDialogProps) {
           </div>
 
           {/* Discord Channel ID - only shown when Discord is selected */}
-          {isDiscord && (
+          {requiresRecipientTarget && (
             <div className="space-y-2">
-              <Label>{t('dialog.discordChannelId')}</Label>
+              <Label>{isTelegram ? t('dialog.telegramChatId') : t('dialog.discordChannelId')}</Label>
               <Input
                 value={discordChannelId}
                 onChange={(e) => setDiscordChannelId(e.target.value)}
-                placeholder={t('dialog.discordChannelIdPlaceholder')}
+                placeholder={isTelegram ? t('dialog.telegramChatIdPlaceholder') : t('dialog.discordChannelIdPlaceholder')}
               />
               <p className="text-xs text-muted-foreground">
-                {t('dialog.discordChannelIdDesc')}
+                {isTelegram ? t('dialog.telegramChatIdDesc') : t('dialog.discordChannelIdDesc')}
               </p>
             </div>
           )}
@@ -368,18 +374,20 @@ interface CronJobCardProps {
   onToggle: (enabled: boolean) => void;
   onEdit: () => void;
   onDelete: () => void;
-  onTrigger: () => Promise<void>;
+  onTrigger: () => Promise<{ sessionKey?: string } | void>;
 }
 
 function CronJobCard({ job, onToggle, onEdit, onDelete, onTrigger }: CronJobCardProps) {
   const { t } = useTranslation('cron');
   const [triggering, setTriggering] = useState(false);
+  const cronSessionKey = `agent:main:cron:${job.id}`;
 
   const handleTrigger = async () => {
     setTriggering(true);
     try {
-      await onTrigger();
-      toast.success(t('toast.triggered'));
+      const result = await onTrigger();
+      const sessionKey = result?.sessionKey || cronSessionKey;
+      toast.success(`${t('toast.triggered')} (${sessionKey})`);
     } catch (error) {
       console.error('Failed to trigger cron job:', error);
       toast.error(`Failed to trigger task: ${error instanceof Error ? error.message : String(error)}`);
@@ -445,7 +453,10 @@ function CronJobCard({ job, onToggle, onEdit, onDelete, onTrigger }: CronJobCard
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
           <span className="flex items-center gap-1">
             <ChannelIcon type={job.target.channelType as ChannelType} size="sm" />
-            {job.target.channelName}
+            {t('card.delivery')}: {job.target.channelName}
+          </span>
+          <span className="font-mono text-xs">
+            {t('card.executionSession')}: {cronSessionKey}
           </span>
 
           {job.lastRun && (
@@ -467,6 +478,9 @@ function CronJobCard({ job, onToggle, onEdit, onDelete, onTrigger }: CronJobCard
             </span>
           )}
         </div>
+        <p className="text-xs text-muted-foreground">
+          {t('card.deliverySummary')}
+        </p>
 
         {/* Last Run Error */}
         {job.lastRun && !job.lastRun.success && job.lastRun.error && (
@@ -509,9 +523,12 @@ export function Cron() {
   const { t } = useTranslation('cron');
   const { jobs, loading, error, fetchJobs, createJob, updateJob, toggleJob, deleteJob, triggerJob } = useCronStore();
   const { fetchChannels } = useChannelsStore();
+  const switchSession = useChatStore((state) => state.switchSession);
+  const loadSessions = useChatStore((state) => state.loadSessions);
   const gatewayStatus = useGatewayStore((state) => state.status);
   const [showDialog, setShowDialog] = useState(false);
   const [editingJob, setEditingJob] = useState<CronJob | undefined>();
+  const navigate = useNavigate();
 
   const isGatewayRunning = gatewayStatus.state === 'running';
 
@@ -701,7 +718,15 @@ export function Cron() {
                 setShowDialog(true);
               }}
               onDelete={() => handleDelete(job.id)}
-              onTrigger={() => triggerJob(job.id)}
+              onTrigger={async () => {
+                const result = await triggerJob(job.id);
+                const sessionKey = result?.sessionKey || `agent:main:cron:${job.id}`;
+                switchSession(sessionKey);
+                navigate('/');
+                void loadSessions();
+                setTimeout(() => { void loadSessions(); }, 1500);
+                return result;
+              }}
             />
           ))}
         </div>

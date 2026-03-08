@@ -19,7 +19,10 @@
         "runNow": "Chạy ngay",
         "deleteConfirm": "Bạn có chắc muốn xóa tác vụ này?",
         "last": "Lần trước",
-        "next": "Lần tiếp"
+        "next": "Lần tiếp",
+        "executionSession": "Session thực thi",
+        "delivery": "Nơi nhận kết quả",
+        "deliverySummary": "Kết quả cũng có thể được announce sang kênh đích và/hoặc chat main"
     },
     "dialog": {
         "createTitle": "Tạo tác vụ",
@@ -38,6 +41,9 @@
         "discordChannelId": "ID Kênh Discord",
         "discordChannelIdPlaceholder": "Ví dụ: 1438452657525100686",
         "discordChannelIdDesc": "Nhấp chuột phải kênh Discord → Sao chép ID Kênh",
+        "telegramChatId": "Telegram Chat ID",
+        "telegramChatIdPlaceholder": "Ví dụ: 123456789 hoặc -1001234567890",
+        "telegramChatIdDesc": "Nhập chat ID Telegram đích. Với topic, dùng <chatId>:topic:<threadId>.",
         "enableImmediately": "Bật ngay",
         "enableImmediatelyDesc": "Bắt đầu chạy tác vụ sau khi tạo",
         "saveChanges": "Lưu thay đổi"
@@ -65,6 +71,7 @@
         "messageRequired": "Vui lòng nhập tin nhắn",
         "channelRequired": "Vui lòng chọn kênh",
         "discordIdRequired": "Vui lòng nhập ID Kênh Discord",
+        "telegramChatIdRequired": "Vui lòng nhập Telegram Chat ID",
         "scheduleRequired": "Vui lòng chọn hoặc nhập lịch trình"
     }
 }
