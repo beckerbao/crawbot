@@ -281,6 +281,15 @@ pnpm package              # Package for current platform
 pnpm package:mac          # Package for macOS
 pnpm package:win          # Package for Windows
 pnpm package:linux        # Package for Linux
+
+# Build unsign local
+CSC_IDENTITY_AUTO_DISCOVERY=false APPLE_ID= APPLE_APP_SPECIFIC_PASSWORD= APPLE_TEAM_ID= pnpm exec electron-builder --mac --arm64
+
+pnpm exec electron-builder --mac --arm64
+
+# Mở app
+open release/mac-arm64/CrawBot.app
+
 ```
 
 ### Tech Stack
