@@ -905,6 +905,7 @@ function AddChannelDialog({
           type: selectedType,
           name: CHANNEL_NAMES[selectedType],
           token: configValues[meta.configFields[0]?.key] || undefined,
+          accountId: acct,
         });
       }
 
