@@ -96,6 +96,7 @@ interface ChatState {
   // Actions
   loadSessions: () => Promise<void>;
   switchSession: (key: string) => void;
+  renameSession: (key: string, label: string) => Promise<void>;
   switchAgent: (agentId: string) => void;
   newSession: () => void;
   loadHistory: (quiet?: boolean) => Promise<void>;
@@ -1015,6 +1016,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
     // Load history for new session
     get().loadHistory();
+  },
+
+  renameSession: async (key: string, label: string) => {
+    const trimmed = label.trim();
+    if (!trimmed) return;
+
+    const result = await window.electron.ipcRenderer.invoke(
+      'gateway:rpc',
+      'sessions.patch',
+      { key, label: trimmed },
+    ) as { success: boolean; error?: string };
+
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to rename session');
+    }
+
+    set((s) => ({
+      sessions: s.sessions.map((session) =>
+        session.key === key
+          ? { ...session, label: trimmed, displayName: trimmed }
+          : session
+      ),
+    }));
   },
 
   // ── Switch agent ──

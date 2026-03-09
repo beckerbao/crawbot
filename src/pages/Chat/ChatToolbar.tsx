@@ -3,9 +3,10 @@
  * Agent selector, session selector, model selector, new session, refresh, and thinking toggle.
  * Rendered in the Header when on the Chat page.
  */
-import { useMemo, useEffect } from 'react';
-import { RefreshCw, Brain, ChevronDown, Plus, Cpu, Bot, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { useMemo, useEffect, useState } from 'react';
+import { RefreshCw, Brain, ChevronDown, Plus, Cpu, Bot, PanelRightOpen, PanelRightClose, Pencil, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useChatStore } from '@/stores/chat';
 import { useModelsStore } from '@/stores/models';
@@ -21,6 +22,7 @@ export function ChatToolbar() {
   const currentSessionKey = useChatStore((s) => s.currentSessionKey);
   const selectedAgentId = useChatStore((s) => s.selectedAgentId);
   const switchSession = useChatStore((s) => s.switchSession);
+  const renameSession = useChatStore((s) => s.renameSession);
   const switchAgent = useChatStore((s) => s.switchAgent);
   const newSession = useChatStore((s) => s.newSession);
   const refresh = useChatStore((s) => s.refresh);
@@ -43,6 +45,8 @@ export function ChatToolbar() {
   const fetchProviders = useProviderStore((s) => s.fetchProviders);
 
   const { t } = useTranslation('chat');
+  const [isRenamingSession, setIsRenamingSession] = useState(false);
+  const [pendingSessionName, setPendingSessionName] = useState('');
 
   // Load agents and providers on mount
   useEffect(() => {
@@ -58,9 +62,11 @@ export function ChatToolbar() {
   );
 
   // Session display name: strip the agent prefix for readability
-  const sessionDisplayName = (key: string) => {
-    if (key.startsWith(agentPrefix)) return key.slice(agentPrefix.length);
-    return key;
+  const sessionDisplayName = (session: { key: string; displayName?: string; label?: string }) => {
+    if (session.displayName?.trim()) return session.displayName.trim();
+    if (session.label?.trim()) return session.label.trim();
+    if (session.key.startsWith(agentPrefix)) return session.key.slice(agentPrefix.length);
+    return session.key;
   };
 
   const handleAgentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -69,6 +75,35 @@ export function ChatToolbar() {
 
   const handleSessionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     switchSession(e.target.value);
+  };
+
+  const openRenameSession = () => {
+    const currentSession = sessions.find((s) => s.key === currentSessionKey);
+    const currentName = currentSession ? sessionDisplayName(currentSession) : currentSessionKey;
+    setPendingSessionName(currentName);
+    setIsRenamingSession(true);
+  };
+
+  const cancelRenameSession = () => {
+    setIsRenamingSession(false);
+    setPendingSessionName('');
+  };
+
+  const handleRenameSession = async () => {
+    const trimmedName = pendingSessionName.trim();
+    const currentSession = sessions.find((s) => s.key === currentSessionKey);
+    const currentName = currentSession ? sessionDisplayName(currentSession) : currentSessionKey;
+    if (!trimmedName || trimmedName === currentName.trim()) {
+      cancelRenameSession();
+      return;
+    }
+    try {
+      await renameSession(currentSessionKey, trimmedName);
+      cancelRenameSession();
+    } catch (error) {
+      console.error('Failed to rename session:', error);
+      window.alert(`${t('toolbar.renameSessionFailed')}: ${String(error)}`);
+    }
   };
 
   const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -143,30 +178,85 @@ export function ChatToolbar() {
       )}
 
       {/* Session Selector */}
-      <div className="relative">
-        <select
-          value={currentSessionKey}
-          onChange={handleSessionChange}
-          className={cn(
-            'appearance-none rounded-md border border-border bg-background px-3 py-1.5 pr-8',
-            'text-sm text-foreground cursor-pointer',
-            'focus:outline-none focus:ring-2 focus:ring-ring',
-          )}
-        >
-          {/* Show current session if not in filtered list */}
-          {!agentSessions.some((s) => s.key === currentSessionKey) && (
-            <option value={currentSessionKey}>
-              {sessionDisplayName(currentSessionKey)}
-            </option>
-          )}
-          {agentSessions.map((s) => (
-            <option key={s.key} value={s.key}>
-              {sessionDisplayName(s.key)}
-            </option>
-          ))}
-        </select>
-        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-      </div>
+      {isRenamingSession ? (
+        <div className="flex items-center gap-2">
+          <Input
+            value={pendingSessionName}
+            onChange={(e) => setPendingSessionName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void handleRenameSession();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelRenameSession();
+              }
+            }}
+            placeholder={t('toolbar.renameSessionPrompt')}
+            className="h-8 w-[220px]"
+            autoFocus
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => void handleRenameSession()}
+          >
+            <Check className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={cancelRenameSession}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="relative">
+            <select
+              value={currentSessionKey}
+              onChange={handleSessionChange}
+              className={cn(
+                'appearance-none rounded-md border border-border bg-background px-3 py-1.5 pr-8',
+                'text-sm text-foreground cursor-pointer',
+                'focus:outline-none focus:ring-2 focus:ring-ring',
+              )}
+            >
+              {/* Show current session if not in filtered list */}
+              {!agentSessions.some((s) => s.key === currentSessionKey) && (
+                <option value={currentSessionKey}>
+                  {sessionDisplayName({ key: currentSessionKey })}
+                </option>
+              )}
+              {agentSessions.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {sessionDisplayName(s)}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          </div>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={openRenameSession}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{t('toolbar.renameSession')}</p>
+            </TooltipContent>
+          </Tooltip>
+        </>
+      )}
 
       {/* Model Selector */}
       {(providerKeys.length > 0 || defaultModelLabel !== t('toolbar.model.default')) && (

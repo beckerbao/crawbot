@@ -10,6 +10,17 @@
         "paused": "Paused",
         "failed": "Failed"
     },
+    "heartbeat": {
+        "title": "Heartbeat Automation",
+        "description": "Heartbeat uses HEARTBEAT.md and memory files from the main workspace. This is separate from Gateway cron jobs shown below.",
+        "workspace": "Main workspace",
+        "checklist": "Checklist file",
+        "state": "State file",
+        "runtimeLog": "Runtime log",
+        "errorLog": "Error log",
+        "openChecklist": "Open HEARTBEAT.md",
+        "openMemory": "Open memory folder"
+    },
     "empty": {
         "title": "No scheduled tasks",
         "description": "Create scheduled tasks to automate AI workflows. Tasks can send messages, run queries, or perform actions at specified times.",

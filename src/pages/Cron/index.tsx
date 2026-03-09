@@ -528,6 +528,7 @@ export function Cron() {
   const gatewayStatus = useGatewayStore((state) => state.status);
   const [showDialog, setShowDialog] = useState(false);
   const [editingJob, setEditingJob] = useState<CronJob | undefined>();
+  const [mainWorkspace, setMainWorkspace] = useState<string>('');
   const navigate = useNavigate();
 
   const isGatewayRunning = gatewayStatus.state === 'running';
@@ -539,6 +540,33 @@ export function Cron() {
       fetchChannels();
     }
   }, [fetchJobs, fetchChannels, isGatewayRunning]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadAgentDefaults = async () => {
+      try {
+        const result = await window.electron.ipcRenderer.invoke('agent:list') as {
+          success: boolean;
+          defaults?: { workspace?: string };
+        };
+        if (!cancelled && result.success && result.defaults?.workspace) {
+          setMainWorkspace(result.defaults.workspace);
+        }
+      } catch {
+        // Ignore and keep empty state
+      }
+    };
+    void loadAgentDefaults();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const heartbeatChecklistPath = mainWorkspace ? `${mainWorkspace}/HEARTBEAT.md` : '';
+  const heartbeatMemoryDir = mainWorkspace ? `${mainWorkspace}/memory` : '';
+  const heartbeatStatePath = heartbeatMemoryDir ? `${heartbeatMemoryDir}/heartbeat-state.json` : '';
+  const heartbeatRuntimeLogPath = heartbeatMemoryDir ? `${heartbeatMemoryDir}/amz-prod-alert-log.jsonl` : '';
+  const heartbeatErrorLogPath = heartbeatMemoryDir ? `${heartbeatMemoryDir}/amz-prod-alert-errors.log` : '';
 
   // Statistics
   const activeJobs = jobs.filter((j) => j.enabled);
@@ -674,6 +702,39 @@ export function Cron() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Heartbeat Automation */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('heartbeat.title')}</CardTitle>
+          <CardDescription>{t('heartbeat.description')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2 text-sm">
+            <p><span className="font-medium">{t('heartbeat.workspace')}:</span> <span className="font-mono break-all">{mainWorkspace || '-'}</span></p>
+            <p><span className="font-medium">{t('heartbeat.checklist')}:</span> <span className="font-mono break-all">{heartbeatChecklistPath || '-'}</span></p>
+            <p><span className="font-medium">{t('heartbeat.state')}:</span> <span className="font-mono break-all">{heartbeatStatePath || '-'}</span></p>
+            <p><span className="font-medium">{t('heartbeat.runtimeLog')}:</span> <span className="font-mono break-all">{heartbeatRuntimeLogPath || '-'}</span></p>
+            <p><span className="font-medium">{t('heartbeat.errorLog')}:</span> <span className="font-mono break-all">{heartbeatErrorLogPath || '-'}</span></p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => heartbeatChecklistPath && window.electron.ipcRenderer.invoke('shell:openPath', heartbeatChecklistPath)}
+              disabled={!heartbeatChecklistPath}
+            >
+              {t('heartbeat.openChecklist')}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => heartbeatMemoryDir && window.electron.ipcRenderer.invoke('shell:openPath', heartbeatMemoryDir)}
+              disabled={!heartbeatMemoryDir}
+            >
+              {t('heartbeat.openMemory')}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Error Display */}
       {error && (

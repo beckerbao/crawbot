@@ -282,8 +282,12 @@ pnpm package:mac          # Package for macOS
 pnpm package:win          # Package for Windows
 pnpm package:linux        # Package for Linux
 
-# Build unsign local
+# Build unsign local (cả arm64 applie silicon và intel silicon)
 CSC_IDENTITY_AUTO_DISCOVERY=false APPLE_ID= APPLE_APP_SPECIFIC_PASSWORD= APPLE_TEAM_ID= pnpm exec electron-builder --mac --arm64
+
+# Chỉ build .app + apply những thay đổi 
+pnpm build:vite && pnpm exec zx scripts/bundle-openclaw.mjs && CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder --dir --mac --arm64 -c.mac.identity=-
+
 
 pnpm exec electron-builder --mac --arm64
 

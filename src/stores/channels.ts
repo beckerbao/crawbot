@@ -197,14 +197,11 @@ export const useChannelsStore = create<ChannelsState>((set, get) => ({
               }
             }
             // Add accounts from the enabled map that the Gateway didn't report.
-            // For channel types the gateway already knows about, only add disabled
-            // accounts (enabled ones should have been reported by the gateway).
-            // For channel types the gateway doesn't know about at all (e.g. plugin
-            // channels like zalouser), add all entries so they appear in the list.
+            // Some multi-account channels can report the base channel type while
+            // omitting configured accounts during startup/restart windows. If an
+            // account is persisted in openclaw.json, keep it visible in the UI.
             for (const [channelType, acctMap] of Object.entries(enabledResult.map)) {
-              const gatewayKnowsType = channels.some((c) => c.type === channelType);
               for (const [acctId, enabled] of Object.entries(acctMap)) {
-                if (gatewayKnowsType && enabled) continue;
                 const exists = channels.some(
                   (c) => c.type === channelType && (c.accountId || 'default') === acctId
                 );

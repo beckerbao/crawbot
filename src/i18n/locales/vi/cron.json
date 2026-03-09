@@ -10,6 +10,17 @@
         "paused": "Tạm dừng",
         "failed": "Thất bại"
     },
+    "heartbeat": {
+        "title": "Heartbeat Automation",
+        "description": "Heartbeat dùng HEARTBEAT.md và các file memory trong workspace chính. Phần này tách biệt với Gateway cron jobs bên dưới.",
+        "workspace": "Workspace chính",
+        "checklist": "File checklist",
+        "state": "File state",
+        "runtimeLog": "File log runtime",
+        "errorLog": "File log lỗi",
+        "openChecklist": "Mở HEARTBEAT.md",
+        "openMemory": "Mở thư mục memory"
+    },
     "empty": {
         "title": "Chưa có tác vụ định kỳ",
         "description": "Tạo tác vụ định kỳ để tự động hóa quy trình AI. Tác vụ có thể gửi tin nhắn, chạy truy vấn hoặc thực hiện hành động vào thời gian đã định.",

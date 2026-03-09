@@ -12,6 +12,9 @@
     "noLogs": "(Chưa có nhật ký)",
     "toolbar": {
         "agent": "Chọn agent",
+        "renameSession": "Đổi tên phiên",
+        "renameSessionPrompt": "Nhập tên phiên mới",
+        "renameSessionFailed": "Không thể đổi tên phiên",
         "newSession": "Phiên mới",
         "refresh": "Làm mới trò chuyện",
         "showThinking": "Hiện suy nghĩ",
